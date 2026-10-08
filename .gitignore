@@ -23,3 +23,7 @@ venv/
 .vscode/
 .idea/
 .DS_Store
+
+# backtest scratch
+backtest/.venv/
+backtest/__pycache__/

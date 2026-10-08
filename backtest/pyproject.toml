@@ -1,0 +1,24 @@
+[project]
+name = "backtest"
+version = "0.1.0"
+description = "Add your description here"
+authors = [
+    { name = "lingyi.zhang", email = "lingyi.zhang@bytedance.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "httpx>=0.28.1",
+    "openai>=3.26.0",
+    "pandas>=3.0.6",
+    "pydantic>=2.13.5",
+    "python-dotenv>=1.2.4",
+]
+
+[project.scripts]
+backtest = "backtest:main"
+
+["uv_build>=0.12.23,<0.13.0"]
+build-backend = "uv_build"
+
+[tool.uv]
+package = false

@@ -1,0 +1,19 @@
+{
+  "rev": 0.017,
+  "rev_pct": 0.053,
+  "eps": -0.0254,
+  "guid": 0.0173,
+  "guid_cons": 0.0436,
+  "guid_pct": 0.0171,
+  "margin": 0.0199,
+  "tone": -0.0265,
+  "net_surprises": 0.0245,
+  "priced_in": -0.0045,
+  "expected": 0.1538,
+  "expected_x_conf": 0.1518,
+  "one_time": -0.0887,
+  "underlying": 0.0038,
+  "trajectory": 0.0033,
+  "positioning": 0.011,
+  "vs_bear": 0.0207
+}
