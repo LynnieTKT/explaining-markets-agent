@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import os
+import hashlib
 
 import httpx
 from openai import OpenAI
@@ -192,14 +193,15 @@ def format_materials(bundle: object) -> str:
 
 
 # ----------------------------------------------------------------------
-# Structured strategy (default): extract a surprise vector, then map it.
+# Structured strategy (default): compare expectations, then score the reaction.
 #
 # The LLM does not "give a feeling" about the release. It compares what the
 # market expected going in (the pre-release preview: consensus, guidance,
 # what is priced in) against what the company reported (the call facts), and
-# fills a fixed set of fields. A linear map fitted on the historical archive
-# turns the fields into a percentile; the model's own holistic judgement is
-# blended in. Fallback: the single-call strategy below.
+# fills a fixed set of fields. Its overall reaction estimate is adjusted by
+# confidence and averaged across the available models. The detailed fields
+# support that judgment without adding a second set of feature-based votes.
+# Fallback: the single-call strategy below.
 # ----------------------------------------------------------------------
 
 from typing import Literal
@@ -336,15 +338,33 @@ def _ask_structured(
         f"{materials}\n\n"
         f"Compare reported vs expected for {ticker} and fill every field."
     )
+    messages = [
+        {"role": "system", "content": structured_prompt()},
+        {"role": "user", "content": user_prompt},
+    ]
     resp = _openai.chat.completions.parse(
         model=model or openai_model(),
-        messages=[
-            {"role": "system", "content": structured_prompt()},
-            {"role": "user", "content": user_prompt},
-        ],
+        messages=messages,
         response_format=SurpriseView,
     )
-    return resp.choices[0].message.parsed
+    view = resp.choices[0].message.parsed
+    # Preserve each model's view, rather than only the first model's short
+    # rationale, so live outcomes can be traced back to extraction vs mapping.
+    print("[MODEL_VIEW] " + json.dumps({
+        "event_id": summary.get("event_id"),
+        "ticker": ticker,
+        "model_requested": model or openai_model(),
+        "model_returned": resp.model,
+        "response_id": resp.id,
+        "request_sha256": hashlib.sha256(
+            json.dumps(messages, sort_keys=True, ensure_ascii=True).encode()
+        ).hexdigest(),
+        "view": view.model_dump() if view is not None else None,
+        "predicted_percentile": confidence_adjusted_reaction(view) if view is not None else None,
+        "confidence_shrink": CONFIDENCE_SHRINK,
+        "usage": resp.usage.model_dump() if resp.usage is not None else None,
+    }, ensure_ascii=True), flush=True)
+    return view
 
 
 def format_materials_structured(bundle: object) -> str:
@@ -433,11 +453,10 @@ def view_features(view: SurpriseView) -> dict[str, float]:
     }
 
 
-# Fitted on the historical archive (see backtest/fit_mapping.py). Intercept is 0.5
-# by construction; the map is a percentile-shaped linear score. Re-fit when the
-# prompt or the field set changes.
 CONFIDENCE_SHRINK = os.environ.get("CONFIDENCE_SHRINK", "1") != "0"
 
+# Historical feature map, retained for comparisons in backtest/fit_mapping.py.
+# The active strategy below uses the model's overall reaction estimate.
 MAPPING_WEIGHTS: dict[str, float] = {
     "rev": 0.03,
     "rev_pct": 0.01,
@@ -460,12 +479,7 @@ MAPPING_WEIGHTS: dict[str, float] = {
 
 
 def map_to_percentile(view: SurpriseView, weights: dict[str, float] | None = None) -> float:
-    """Linear score, then shrink toward the median by the model's confidence.
-
-    The archive shows the model's confidence is informative (high-confidence
-    predictions track the realized ranking three times better than low-confidence
-    ones), so a low-confidence view should sit closer to 0.5 in the cross-section.
-    """
+    """Historical feature-based score, retained for reproducible backtests."""
     w = weights or MAPPING_WEIGHTS
     feats = view_features(view)
     score = 0.5 + sum(w.get(k, 0.0) * v for k, v in feats.items())
@@ -474,13 +488,18 @@ def map_to_percentile(view: SurpriseView, weights: dict[str, float] | None = Non
     return max(0.0, min(1.0, score))
 
 
-def ensemble_models() -> list[str]:
-    """Models whose structured views are averaged. One entry = no ensemble.
+def confidence_adjusted_reaction(view: SurpriseView) -> float:
+    """Shrink the overall judgment toward the median without adding feature votes.
 
-    Backtest (Q3 2026 contest window): gpt-5-mini alone 0.167, gpt-5.4-nano alone
-    0.156, their average 0.176. Averaging the same prompt across two models only
-    helped once the v2 rules were in place.
+    Both fields are validated in [0, 1], so this convex combination is bounded.
     """
+    if not CONFIDENCE_SHRINK:
+        return view.expected_reaction
+    return 0.5 + (view.expected_reaction - 0.5) * view.confidence
+
+
+def ensemble_models() -> list[str]:
+    """Models whose confidence-adjusted scores are averaged. One entry = no ensemble."""
     raw = os.environ.get("ENSEMBLE_MODELS", "")
     models = [m.strip() for m in raw.split(",") if m.strip()]
     return models or [openai_model()]
@@ -503,12 +522,12 @@ def predict_structured(*, summary: dict, ticker: str, event_type: str) -> tuple[
         views = [v for v in ex.map(one, models) if v is not None]
     if not views:
         return _ask_llm(summary=summary, ticker=ticker, event_type=event_type), None
-    score = sum(map_to_percentile(v) for v in views) / len(views)
+    score = sum(confidence_adjusted_reaction(v) for v in views) / len(views)
     return score, views[0]
 
 
 # ----------------------------------------------------------------------
-# Default strategy: a single calibrated LLM call per asset.
+# Direct fallback: a single calibrated LLM call per asset.
 # Swap this out, or rewrite `predict` entirely, to enter your own model.
 # ----------------------------------------------------------------------
 

@@ -31,10 +31,14 @@ uv run python fit_mapping.py --label structured-v2-nano-q3   # fit/ablate the li
 ```
 
 Model outputs are cached per label in `cache/<label>.jsonl`; re-runs only call
-the LLM for events not yet cached. Cached runs for the current strategy are
-committed so you can score variants of the mapping without spending anything.
+the LLM for events not yet cached. Cached structured outputs are committed so
+you can recalculate their scores with alternative mappings without new model calls.
 
 ## Reference numbers (Q3 2026 contest window, dR2 on the common sample)
+
+The structured-strategy reference results below use the original feature map,
+retained in `map_to_percentile` for replay comparisons. The active strategy
+averages confidence-adjusted overall reaction estimates.
 
 | run | dR2 |
 |---|---|
@@ -42,6 +46,6 @@ committed so you can score variants of the mapping without spending anything.
 | structured v1, nano | 0.138 |
 | structured v2 + confidence shrink, nano | 0.156 |
 | structured v2, gpt-5-mini | 0.167 |
-| v2 mini + nano averaged (deployed) | 0.176 |
+| v2 mini + nano averaged (original feature map) | 0.176 |
 | official baseline GLM | 0.124 |
 | last quarter's winner | 0.168 |

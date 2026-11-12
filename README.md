@@ -138,10 +138,15 @@ def predict(event: dict) -> list[dict]:
 asset's next-day abnormal (market-adjusted) return will rank across **all of the
 quarter's event outcomes**: 0 = the quarter's most negative reaction, 0.50 =
 median, 1 = its most positive. It's a cross-sectional rank across the quarter's
-events, *not* a percentile within the asset's own history. The default
-implementation asks an OpenAI model for a calibrated percentile; with no
-`OPENAI_API_KEY` set it returns `0.5` so the round-trip works before you plug in
-your real model.
+events, *not* a percentile within the asset's own history. The default structured
+strategy compares the reported facts with pre-release expectations, then shrinks
+the model's overall reaction estimate toward `0.5` according to its confidence.
+When `ENSEMBLE_MODELS` lists multiple models, their adjusted estimates are averaged.
+The detailed financial comparisons inform each model's judgment; they are not
+added again through fixed feature weights. Each model's view and resulting score
+are recorded in the application logs for later comparison with actual outcomes.
+With no `OPENAI_API_KEY` set it returns `0.5` so the round-trip works before you
+plug in your real model.
 
 Re-deploy after editing:
 
