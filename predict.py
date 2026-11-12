@@ -498,6 +498,19 @@ def confidence_adjusted_reaction(view: SurpriseView) -> float:
     return 0.5 + (view.expected_reaction - 0.5) * view.confidence
 
 
+# Fit old ensemble scores on confidence-adjusted scores for 626 paired Q3
+# forecasts. Only forecasts were used, not realized returns or Q4 data. Keeping
+# the old score scale matters when new and already-submitted predictions are
+# scored together during the competition. Apply after averaging, before clipping.
+REACTION_SCALE_INTERCEPT = 0.00036826463803275915
+REACTION_SCALE_SLOPE = 1.0576485891434109
+
+
+def align_reaction_score(score: float) -> float:
+    """Express the new judgment on the scale of prior competition predictions."""
+    return max(0.0, min(1.0, REACTION_SCALE_INTERCEPT + REACTION_SCALE_SLOPE * score))
+
+
 def ensemble_models() -> list[str]:
     """Models whose confidence-adjusted scores are averaged. One entry = no ensemble."""
     raw = os.environ.get("ENSEMBLE_MODELS", "")
@@ -522,7 +535,13 @@ def predict_structured(*, summary: dict, ticker: str, event_type: str) -> tuple[
         views = [v for v in ex.map(one, models) if v is not None]
     if not views:
         return _ask_llm(summary=summary, ticker=ticker, event_type=event_type), None
-    score = sum(confidence_adjusted_reaction(v) for v in views) / len(views)
+    raw_score = sum(confidence_adjusted_reaction(v) for v in views) / len(views)
+    score = align_reaction_score(raw_score)
+    print("[PREDICTION] " + json.dumps({
+        "event_id": summary.get("event_id"), "ticker": ticker,
+        "successful_models": len(views), "raw_score": raw_score,
+        "predicted_percentile": score,
+    }), flush=True)
     return score, views[0]
 
 

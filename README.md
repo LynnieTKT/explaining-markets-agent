@@ -142,6 +142,8 @@ events, *not* a percentile within the asset's own history. The default structure
 strategy compares the reported facts with pre-release expectations, then shrinks
 the model's overall reaction estimate toward `0.5` according to its confidence.
 When `ENSEMBLE_MODELS` lists multiple models, their adjusted estimates are averaged.
+The average is then put on the prior submission's score scale using a fixed
+linear adjustment fitted to paired Q3 forecasts, and bounded to `[0, 1]`.
 The detailed financial comparisons inform each model's judgment; they are not
 added again through fixed feature weights. Each model's view and resulting score
 are recorded in the application logs for later comparison with actual outcomes.

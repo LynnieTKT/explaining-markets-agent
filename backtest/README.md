@@ -38,7 +38,8 @@ you can recalculate their scores with alternative mappings without new model cal
 
 The structured-strategy reference results below use the original feature map,
 retained in `map_to_percentile` for replay comparisons. The active strategy
-averages confidence-adjusted overall reaction estimates.
+averages confidence-adjusted overall reaction estimates and aligns their scale
+with the prior submission using paired Q3 forecasts.
 
 | run | dR2 |
 |---|---|

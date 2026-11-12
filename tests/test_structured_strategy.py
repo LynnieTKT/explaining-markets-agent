@@ -39,7 +39,7 @@ def test_models_are_adjusted_individually_before_averaging(monkeypatch):
     views = {"first": view(0.8, 0.9), "second": view(0.2, 0.6)}
     monkeypatch.setattr(strategy, "_ask_structured", lambda **kw: views[kw["model"]])
     score, first = strategy.predict_structured(summary={}, ticker="TEST", event_type="EARNINGS_RELEASE")
-    assert score == pytest.approx((0.77 + 0.32) / 2)
+    assert score == pytest.approx(0.5767867457211917)
     assert first is views["first"]
 
 
@@ -55,7 +55,7 @@ def test_failed_model_does_not_dilute_successful_model(monkeypatch):
 
     monkeypatch.setattr(strategy, "_ask_structured", call)
     score, first = strategy.predict_structured(summary={}, ticker="TEST", event_type="EARNINGS_RELEASE")
-    assert score == pytest.approx(0.77)
+    assert score == pytest.approx(0.8147576782784591)
     assert first is successful
 
 
@@ -66,3 +66,20 @@ def test_no_structured_views_uses_existing_direct_fallback(monkeypatch):
     score, first = strategy.predict_structured(summary={}, ticker="TEST", event_type="EARNINGS_RELEASE")
     assert score == 0.61
     assert first is None
+
+
+def test_score_scale_is_applied_after_combining_opposing_models(monkeypatch):
+    monkeypatch.setattr(strategy, "CONFIDENCE_SHRINK", True)
+    monkeypatch.setattr(strategy, "ensemble_models", lambda: ["positive", "negative"])
+    views = {"positive": view(1.0, 1.0), "negative": view(0.0, 1.0)}
+    monkeypatch.setattr(strategy, "_ask_structured", lambda **kw: views[kw["model"]])
+    score, _ = strategy.predict_structured(summary={}, ticker="TEST", event_type="EARNINGS_RELEASE")
+    assert score == pytest.approx(0.5291925592097382)
+
+
+def test_extreme_positive_judgment_stays_within_submission_range(monkeypatch):
+    monkeypatch.setattr(strategy, "CONFIDENCE_SHRINK", True)
+    monkeypatch.setattr(strategy, "ensemble_models", lambda: ["positive"])
+    monkeypatch.setattr(strategy, "_ask_structured", lambda **kw: view(1.0, 1.0))
+    score, _ = strategy.predict_structured(summary={}, ticker="TEST", event_type="EARNINGS_RELEASE")
+    assert score == 1.0
