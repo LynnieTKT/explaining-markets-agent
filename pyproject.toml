@@ -3,7 +3,7 @@ name = "explaining-markets-modal-starter"
 version = "0.1.0b1"
 description = "A minimal Modal starter for the Explaining Markets competition."
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 license = { text = "MIT" }
 dependencies = [
     "modal>=0.64",
@@ -11,6 +11,10 @@ dependencies = [
     "httpx>=0.27",
     "openai>=1.40",
     "pydantic>=2.6",
+    "numpy==2.5.4",
+    "pandas==3.1.1",
+    "scikit-learn==1.9.1",
+    "joblib==1.6.0",
     # Needed locally so `modal deploy` can read .env via Secret.from_dotenv.
     "python-dotenv>=1.0",
 ]

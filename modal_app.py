@@ -41,9 +41,10 @@ import modal
 app = modal.App("explaining-markets-starter")
 
 image = (
-    modal.Image.debian_slim()
-    .pip_install("fastapi[standard]", "httpx", "openai", "pydantic")
-    .add_local_python_source("explaining_markets", "predict")
+    modal.Image.debian_slim(python_version="3.14")
+    .pip_install("fastapi[standard]", "httpx", "openai", "pydantic",
+                 "numpy==2.5.4", "pandas==3.1.1", "scikit-learn==1.9.1", "joblib==1.6.0")
+    .add_local_python_source("explaining_markets", "predict", ignore=[])
 )
 
 # Distributed key-value store for idempotency, keyed on the Webhook-Id header.

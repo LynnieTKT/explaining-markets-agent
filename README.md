@@ -29,6 +29,8 @@ goes after the ACK, not before.
 
 This repo uses [uv](https://docs.astral.sh/uv/) — install it from the
 [uv installation guide](https://docs.astral.sh/uv/getting-started/installation/).
+Python 3.12 or newer is required by the numerical dependencies. The Modal image
+uses Python 3.14 and pins the training libraries used by the bundled model.
 
 > **Prefer pip?** Run `python -m venv .venv && source .venv/bin/activate && pip install -e ".[dev]"`
 > instead of `uv sync`, and drop the `uv run` prefix from every command below.
@@ -144,9 +146,19 @@ the model's overall reaction estimate toward `0.5` according to its confidence.
 When `ENSEMBLE_MODELS` lists multiple models, their adjusted estimates are averaged.
 The average is then put on the prior submission's score scale using a fixed
 linear adjustment fitted to paired Q3 forecasts, and bounded to `[0, 1]`.
-The detailed financial comparisons inform each model's judgment; they are not
-added again through fixed feature weights. Each model's view and resulting score
-are recorded in the application logs for later comparison with actual outcomes.
+This is the base forecast. When both configured model views are available and
+the event's `knowledge_cutoff` covers the correction artifact's training and
+method-selection data, a frozen gradient-boosted model adjusts that score using
+the detailed assessments, earlier-quarter company outcomes, option statistics,
+and daily stock/SPY price features. Daily bars closing after the cutoff are
+excluded. The final score remains in `[0, 1]`.
+
+The artifact is fixed for each deployment; the webhook does not retrain it.
+Earlier cutoffs, unavailable required inputs, or insufficient time before the
+prediction deadline retain the base forecast. Each model's view, base score,
+correction decision and final score are logged. See
+[`backtest/README.md`](backtest/README.md#training-the-statistical-correction)
+for the offline training manifest and reproducibility requirements.
 With no `OPENAI_API_KEY` set it returns `0.5` so the round-trip works before you
 plug in your real model.
 
@@ -158,6 +170,8 @@ uv run modal deploy modal_app.py
 
 Only your first submission for an event is scored — re-POSTing the same event is
 accepted but won't overwrite it, so get it right the first time.
+Keep the public Model Card accurate when releasing changes to the prediction
+method or its data sources, as required by the contest rules.
 
 ---
 

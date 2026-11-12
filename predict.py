@@ -1,8 +1,9 @@
-"""★ THIS IS THE ONLY FILE YOU NEED TO EDIT. ★
+"""Prediction entry point for the Explaining Markets submission.
 
 `predict(event)` is called once per competition event, after the webhook has
 already been verified for you. Return one prediction per focal asset. Everything
-else in this repo (webhook verification, dedupe, submission) is plumbing.
+else in the webhook path (verification, dedupe, submission) is plumbing.
+The optional historical correction lives in explaining_markets.statistical.
 
 The default implementation asks an OpenAI model for a calibrated percentile. If
 `OPENAI_API_KEY` is not set, it returns a 0.5 baseline so the full deploy →
@@ -68,7 +69,7 @@ def predict(event: dict) -> list[dict]:
     for asset in event["focal_assets"]:
         ticker = asset["identifier_value"]
         if strategy == "structured":
-            p, view = predict_structured(summary=summary_json, ticker=ticker, event_type=event["event_type"])
+            p, view = predict_structured(summary=summary_json, ticker=ticker, event_type=event["event_type"], event=event)
             if view is not None:
                 print(f"[INFO] {ticker}: p={p:.2f} guid={view.guidance_action} rev={view.revenue_vs_expectations} "
                       f"expected={view.expected_reaction:.2f} conf={view.confidence:.2f} | {view.rationale}")
@@ -520,7 +521,7 @@ def ensemble_models() -> list[str]:
     return models or [openai_model()]
 
 
-def predict_structured(*, summary: dict, ticker: str, event_type: str) -> tuple[float, SurpriseView | None]:
+def predict_structured(*, summary: dict, ticker: str, event_type: str, event: dict | None = None) -> tuple[float, SurpriseView | None]:
     """Structured strategy: one view per ensemble model, scores averaged; fallback to the single-call strategy."""
     from concurrent.futures import ThreadPoolExecutor
 
@@ -534,15 +535,26 @@ def predict_structured(*, summary: dict, ticker: str, event_type: str) -> tuple[
             return None
 
     with ThreadPoolExecutor(max_workers=len(models)) as ex:
-        views = [v for v in ex.map(one, models) if v is not None]
+        responses = list(ex.map(one, models))
+    views = [v for v in responses if v is not None]
     if not views:
         return _ask_llm(summary=summary, ticker=ticker, event_type=event_type), None
     raw_score = sum(confidence_adjusted_reaction(v) for v in views) / len(views)
     score = align_reaction_score(raw_score)
+    correction = {"applied": False, "reason": "no_event_metadata"}
+    if event is not None:
+        try:
+            from explaining_markets.statistical import adjust_forecast
+            named_views = {model: view for model, view in zip(models, responses) if view is not None}
+            score, correction = adjust_forecast(score, event=event, summary=summary,
+                                                 ticker=ticker, views=named_views)
+        except Exception as exc:
+            correction = {"applied": False, "reason": "correction_unavailable", "error_type": type(exc).__name__}
     print("[PREDICTION] " + json.dumps({
         "event_id": summary.get("event_id"), "ticker": ticker,
         "successful_models": len(views), "raw_score": raw_score,
         "predicted_percentile": score,
+        "statistical_correction": correction,
     }), flush=True)
     return score, views[0]
 
