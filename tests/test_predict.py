@@ -128,6 +128,19 @@ def test_optional_items_may_be_absent() -> None:
     assert "Option-market" not in facts_only and "Research note" not in facts_only
 
 
+def test_structured_preview_keeps_late_positioning_and_risk_context() -> None:
+    tail = (
+        "\n## Trading setup\nThe stock is 15% below its yearly high.\n"
+        "## Risks\nA weak guide could offset the reported beat.\n"
+    )
+    preview = {**PREVIEW_ITEM, "content": "Research context. " * 900 + tail}
+    text = predict_module.format_materials_structured(_bundle(FACTS_ITEM, preview, STATS_ITEM))
+    assert tail in text
+    assert "[preview truncated]" not in text
+    assert "Full-year guidance was raised." in text
+    assert "Implied earnings volatility: 8.5%" in text
+
+
 def test_an_unavailable_skew_is_said_plainly() -> None:
     stats = {**STATS, "skew_25_delta": {"value": None, "status": "illiquid_wings"}}
     text = predict_module.format_materials(_bundle(FACTS_ITEM, {**STATS_ITEM, "content": stats}))

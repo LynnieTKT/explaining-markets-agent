@@ -206,7 +206,9 @@ def format_materials(bundle: object) -> str:
 
 from typing import Literal
 
-PREVIEW_MAX_CHARS_STRUCTURED = 14000
+# Observed previews reach about 20,000 characters. A 14,000-character cap cut
+# off late positioning, valuation and risk sections used by this strategy.
+PREVIEW_MAX_CHARS_STRUCTURED = 24000
 
 
 class SurpriseView(BaseModel):
